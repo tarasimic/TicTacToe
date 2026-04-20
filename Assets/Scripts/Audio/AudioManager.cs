@@ -15,7 +15,7 @@ public class AudioManager : MonoBehaviour
     public AudioClip winClip;
     public AudioClip popupClip;
 
-    private void Start()
+    private void Awake()
     {
         if (Instance != null && Instance != this)
         {
@@ -29,10 +29,14 @@ public class AudioManager : MonoBehaviour
         AudioSource[] sources = GetComponents<AudioSource>();
         bgmSource = sources[0];
         sfxSource = sources[1];
-
         bgmSource.loop = true;
+    }
+
+    private void Start()
+    {
         bgmSource.mute = !GameManager.Instance.gameData.bgmEnabled;
         sfxSource.mute = !GameManager.Instance.gameData.sfxEnabled;
+        PlayBGM();
     }
 
     public void PlayBGM()
