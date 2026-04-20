@@ -15,7 +15,7 @@ public class AudioManager : MonoBehaviour
     public AudioClip winClip;
     public AudioClip popupClip;
 
-    private void Awake()
+    private void Start()
     {
         if (Instance != null && Instance != this)
         {
