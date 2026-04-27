@@ -2,9 +2,15 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
+using System.Collections; // Required for Coroutines (IEnumerator)
 
 public class BoardManager : MonoBehaviour
 {
+    [Header("Animation")]
+    [SerializeField] private CellAnimator cellAnimator;
+    [Header("Strike")]
+    [SerializeField] private StrikeAnimation strikeAnimation;
+
     [Header("Board")]
     [SerializeField] private Button[] cells;
     [SerializeField] private Image[] markImages;
@@ -75,14 +81,17 @@ public class BoardManager : MonoBehaviour
         player2MovesText.text = "P2: 0";
         timerText.text = "00:00";
 
+        // Reset UI
         gameOverPopup.SetActive(false);
-
+        
+        // Hide all marks
         for (int i = 0; i < markImages.Length; i++)
         {
             markImages[i].sprite = null;
             markImages[i].color = new Color(1, 1, 1, 0);
         }
 
+        // Setup Buttons
         for (int i = 0; i < cells.Length; i++)
         {
             cells[i].onClick.RemoveAllListeners();
@@ -97,25 +106,30 @@ public class BoardManager : MonoBehaviour
 
         boardState[index] = currentPlayer;
 
-        int themeIndex = GameManager.Instance.gameData.selectedThemeIndex;
-
+        // Use ThemeManager if available, otherwise fallback to local sprites
         if (currentPlayer == 1)
         {
-            markImages[index].sprite = xSprites[themeIndex];
+            markImages[index].sprite = ThemeManager.Instance != null ? 
+                ThemeManager.Instance.GetXSprite() : xSprites[0];
             markImages[index].color = Color.white;
             p1Moves++;
             player1MovesText.text = $"P1: {p1Moves}";
         }
         else
         {
-            markImages[index].sprite = oSprites[themeIndex];
+            markImages[index].sprite = ThemeManager.Instance != null ? 
+                ThemeManager.Instance.GetOSprite() : oSprites[0];
             markImages[index].color = Color.white;
             p2Moves++;
             player2MovesText.text = $"P2: {p2Moves}";
         }
 
-        AudioManager.Instance.PlaySFX(AudioManager.Instance.placementClip);
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.PlaySFX(AudioManager.Instance.placementClip);
 
+        if (cellAnimator != null)
+            cellAnimator.PlayPlacementAnimation(cells[index].transform);
+            
         int[] winCombo = CheckWin();
         if (winCombo != null)
         {
@@ -159,52 +173,69 @@ public class BoardManager : MonoBehaviour
     {
         gameActive = false;
 
-        GameData data = GameManager.Instance.gameData;
-        data.totalGames++;
-        data.totalDuration += elapsedTime;
+        // Update Stats in GameManager
+        if (GameManager.Instance != null)
+        {
+            GameData data = GameManager.Instance.gameData;
+            data.totalGames++;
+            data.totalDuration += elapsedTime;
 
-        if (winner == 1)
-        {
-            data.player1Wins++;
-            resultText.text = "Player 1 Wins!";
-            AudioManager.Instance.PlaySFX(AudioManager.Instance.winClip);
+            if (winner == 1) data.player1Wins++;
+            else if (winner == 2) data.player2Wins++;
+            else data.draws++;
+
+            GameManager.Instance.SaveGame();
         }
-        else if (winner == 2)
+
+        // Handle UI Text
+        if (winner == 0)
         {
-            data.player2Wins++;
-            resultText.text = "Player 2 Wins!";
-            AudioManager.Instance.PlaySFX(AudioManager.Instance.winClip);
+            resultText.text = "Draw!";
         }
         else
         {
-            data.draws++;
-            resultText.text = "Draw!";
+            resultText.text = $"Player {winner} Wins!";
+            if (AudioManager.Instance != null)
+                AudioManager.Instance.PlaySFX(AudioManager.Instance.winClip);
         }
-
-        GameManager.Instance.SaveGame();
 
         int minutes = (int)elapsedTime / 60;
         int seconds = (int)elapsedTime % 60;
         durationText.text = $"Duration: {minutes:00}:{seconds:00}";
 
-        gameOverPopup.SetActive(true);
+        // Trigger Strike Animation or Show Popup immediately
+        if (winCombo != null && strikeAnimation != null)
+        {
+            Vector2 startPos = cells[winCombo[0]].GetComponent<RectTransform>().anchoredPosition;
+            Vector2 endPos = cells[winCombo[2]].GetComponent<RectTransform>().anchoredPosition;
+            strikeAnimation.PlayStrike(startPos, endPos);
+            StartCoroutine(ShowGameOverDelayed());
+        }
+        else
+        {
+            gameOverPopup.SetActive(true);
+        }
     }
 
     public void OnRetryClicked()
     {
-        AudioManager.Instance.PlaySFX(AudioManager.Instance.buttonClickClip);
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.PlaySFX(AudioManager.Instance.buttonClickClip);
         StartGame();
     }
 
     public void OnExitClicked()
     {
-        AudioManager.Instance.PlaySFX(AudioManager.Instance.buttonClickClip);
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.PlaySFX(AudioManager.Instance.buttonClickClip);
         SceneManager.LoadScene("PlayScene");
     }
 
     public void OnSettingsClicked()
     {
-        AudioManager.Instance.PlaySFX(AudioManager.Instance.buttonClickClip);
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.PlaySFX(AudioManager.Instance.buttonClickClip);
+        
         if (GameManager.Instance != null)
         {
             bgmToggle.isOn = GameManager.Instance.gameData.bgmEnabled;
@@ -215,17 +246,26 @@ public class BoardManager : MonoBehaviour
 
     public void OnCloseSettingsClicked()
     {
-        AudioManager.Instance.PlaySFX(AudioManager.Instance.buttonClickClip);
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.PlaySFX(AudioManager.Instance.buttonClickClip);
         settingsPopup.SetActive(false);
     }
 
     public void OnBGMToggleChanged(bool value)
     {
-        AudioManager.Instance.SetBGMEnabled(value);
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.SetBGMEnabled(value);
     }
 
     public void OnSFXToggleChanged(bool value)
     {
-        AudioManager.Instance.SetSFXEnabled(value);
+        if (AudioManager.Instance != null)
+            AudioManager.Instance.SetSFXEnabled(value);
+    }
+
+    private IEnumerator ShowGameOverDelayed()
+    {
+        yield return new WaitForSeconds(0.5f);
+        gameOverPopup.SetActive(true);
     }
 }
